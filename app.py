@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, send_from_directory
 from dotenv import load_dotenv
 from openai import OpenAI
+from pathlib import Path
 import sqlite3
 import os
 
@@ -17,6 +18,13 @@ client = OpenAI(
     base_url=OLLAMA_BASE_URL,
     api_key="ollama"
 )
+
+PROMPT_DIR = Path(__file__).with_name("prompts")
+
+
+def load_prompt(filename):
+    prompt_path = PROMPT_DIR / filename
+    return prompt_path.read_text(encoding="utf-8").strip()
 
 
 def get_db_connection():
@@ -91,6 +99,37 @@ def get_student_by_id():
     return get_student(int(student_id_raw))
 
 
+@app.route("/students/by-subject")
+def get_students_by_subject():
+    subject_code = request.args.get("subject_code", "").strip().upper()
+
+    if not subject_code:
+        return "<p>Subject code is required.</p>", 400
+
+    conn = get_db_connection()
+    students = conn.execute(
+        "SELECT student_id, student_name, subject_code FROM students WHERE subject_code = ?",
+        (subject_code,)
+    ).fetchall()
+    conn.close()
+
+    if not students:
+        return f"<p>No students found for subject code {subject_code}.</p>", 404
+
+    html = "<ul>"
+    for student in students:
+        html += (
+            f"<li>"
+            f"{student['student_id']} - "
+            f"{student['student_name']} - "
+            f"{student['subject_code']}"
+            f"</li>"
+        )
+    html += "</ul>"
+
+    return html
+
+
 @app.route("/ask", methods=["POST"])
 def ask_local_agent():
     question = request.form.get("question", "").strip()
@@ -126,6 +165,46 @@ def ask_local_agent():
         return (
             "<p>Local AI agent request failed. "
             "Check that Ollama is running and that qwen2.5:0.5b is installed.</p>"
+            f"<pre>{exc}</pre>",
+            503,
+        )
+
+
+@app.route("/ask-with-context", methods=["POST"])
+def ask_with_context():
+    question = request.form.get("question", "").strip()
+
+    if not question:
+        return "<p>Question is required.</p>", 400
+
+    try:
+        system_prompt = load_prompt("implementation_system_prompt.txt")
+        task_prompt = load_prompt("context_qa_task_prompt.txt")
+        final_prompt = f"{task_prompt}\n\nUser question:\n{question}"
+
+        response = client.chat.completions.create(
+            model=OLLAMA_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": final_prompt,
+                },
+            ],
+            max_tokens=300,
+            temperature=0,
+        )
+
+        answer = response.choices[0].message.content
+
+        return f"<p>{answer}</p>"
+
+    except Exception as exc:
+        return (
+            "<p>Context-aware request failed.</p>"
             f"<pre>{exc}</pre>",
             503,
         )

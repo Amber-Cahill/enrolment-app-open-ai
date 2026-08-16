@@ -31,6 +31,16 @@
             </form>
 
             <div id="student-result" class="panel"></div>
+
+            <h2>Find Students by Subject Code</h2>
+
+            <form hx-get="/students/by-subject" hx-target="#subject-result">
+                <label for="subject_code">Subject Code</label>
+                <input id="subject_code" name="subject_code" type="text" placeholder="Example: ASD101">
+                <button type="submit">Find Students</button>
+            </form>
+
+            <div id="subject-result" class="panel"></div>
         </section>
 
         <section class="card card-right">
@@ -43,6 +53,16 @@
             </form>
 
             <div id="agent-result" class="panel"></div>
+
+            <h2>Ask With Context</h2>
+
+            <form hx-post="/ask-with-context" hx-target="#context-result">
+                <label for="context-question">Question</label>
+                <textarea id="context-question" name="question" rows="4">Explain the Student Enrolment App.</textarea>
+                <button type="submit">Ask With Context</button>
+            </form>
+
+            <div id="context-result" class="panel"></div>
         </section>
     </div>
 </main>
